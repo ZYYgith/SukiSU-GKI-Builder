@@ -56,9 +56,9 @@ jobs:
       - name: Enable kernel configs
         run: |
           cd kernel/common
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KPM=y
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS=y
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS_ALL=y
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KPM
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS_ALL
 
       - name: Build kernel
         run: |
