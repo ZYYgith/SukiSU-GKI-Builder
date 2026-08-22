@@ -1,0 +1,90 @@
+name: Build SukiSU Ultra GKI Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_branch:
+        description: 'Kernel branch'
+        required: true
+        default: 'common-android12-5.10'
+      susi_mode:
+        description: 'SukiSU mode'
+        required: true
+        default: 'susfs-main'
+        type: choice
+        options:
+          - susfs-main
+          - main
+      lto:
+        description: 'LTO mode'
+        required: true
+        default: 'thin'
+        type: choice
+        options:
+          - thin
+          - full
+          - none
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential bc bison flex libssl-dev \
+            libelf-dev curl zip unzip python3 python3-pip repo wget cpio \
+            ccache lzop bzip2 gperf
+          git config --global user.email "builder@local"
+          git config --global user.name "Builder"
+
+      - name: Sync kernel source
+        run: |
+          mkdir -p kernel && cd kernel
+          repo init --depth 1 -u https://android.googlesource.com/kernel/manifest -b ${{ github.event.inputs.kernel_branch }}
+          repo sync -j$(nproc)
+
+      - name: Integrate SukiSU Ultra
+        run: |
+          cd kernel/common
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s ${{ github.event.inputs.susi_mode }}
+
+      - name: Enable kernel configs
+        run: |
+          cd kernel/common
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KPM=y
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS=y
+          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS_ALL=y
+
+      - name: Build kernel
+        run: |
+          cd kernel
+          LTO=${{ github.event.inputs.lto }} BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+
+      - name: Package AnyKernel3
+        run: |
+          IMAGE_PATH=$(find kernel/out -name "Image" -type f | head -1)
+          echo "Found Image at: $IMAGE_PATH"
+          if [ -z "$IMAGE_PATH" ]; then
+            echo "ERROR: Kernel Image not found!"
+            find kernel/out -name "Image*" | head -20
+            exit 1
+          fi
+          git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
+          cd ak3
+          cp "$IMAGE_PATH" ./Image
+          sed -i 's/is_slot_device=0/is_slot_device=1/' anykernel.sh
+          sed -i 's/device.name1=placeholder/device.name1=diting/' anykernel.sh
+          zip -r9 ../SukiSU-Ultra-GKI-android12-5.10.zip *
+          cd ..
+          ls -lh SukiSU-Ultra-GKI-android12-5.10.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: SukiSU-Ultra-GKI-Kernel
+          path: SukiSU-Ultra-GKI-android12-5.10.zip
