@@ -72,29 +72,34 @@ jobs:
 
       - name: Package AnyKernel3
         run: |
-          IMAGE_PATH=$(find kernel/out -name "Image.lz4" -type f | head -1)
-          echo "Found Image.lz4 at: $IMAGE_PATH"
+          # 先保存当前工作目录
+          WORKDIR=$(pwd)
+          
+          # 查找内核镜像（优先 Image.lz4，没有就找 Image）
+          IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image.lz4" -type f | head -1)
           if [ -z "$IMAGE_PATH" ]; then
-            echo "Trying Image instead..."
-            IMAGE_PATH=$(find kernel/out -name "Image" -type f | head -1)
-            echo "Found Image at: $IMAGE_PATH"
+            IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image" -type f | head -1)
           fi
-          if [ -z "$IMAGE_PATH" ]; then
+          
+          echo "Kernel image: $IMAGE_PATH"
+          if [ -z "$IMAGE_PATH" ] || [ ! -f "$IMAGE_PATH" ]; then
             echo "ERROR: Kernel image not found!"
-            find kernel/out -name "Image*" | head -20
+            find "$WORKDIR/kernel/out" -name "Image*" | head -20
             exit 1
           fi
+          
+          # 下载 AnyKernel3
           git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
+          
+          # 复制内核镜像（用绝对路径）
+          cp "$IMAGE_PATH" ak3/Image
+          
+          # 配置 A/B 分区和设备名
           cd ak3
-          cp "$IMAGE_PATH" ./Image
           sed -i 's/is_slot_device=0/is_slot_device=1/' anykernel.sh
           sed -i 's/device.name1=placeholder/device.name1=diting/' anykernel.sh
+          
+          # 打包
           zip -r9 ../SukiSU-Ultra-GKI-android12-5.10.zip *
           cd ..
           ls -lh SukiSU-Ultra-GKI-android12-5.10.zip
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SukiSU-Ultra-GKI-Kernel
-          path: SukiSU-Ultra-GKI-android12-5.10.zip
