@@ -63,7 +63,24 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel
-          LTO=${{ github.event.inputs.lto }} BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+          
+          # 去掉 check_defconfig，避免配置修改后校验失败
+          sed -i 's/check_defconfig && //g' common/build.config.gki
+          
+          # 在 defconfig 生成后自动注入 KPM 和 KALLSYMS
+          cat > /tmp/custom_config.sh << 'EOF'
+          #!/bin/bash
+          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KPM
+          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KALLSYMS
+          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KALLSYMS_ALL
+          (cd ${OUT_DIR} && make O=${OUT_DIR} olddefconfig)
+          EOF
+          chmod +x /tmp/custom_config.sh
+          
+          POST_DEFCONFIG_CMDS="/tmp/custom_config.sh" \
+          LTO=${{ github.event.inputs.lto }} \
+          BUILD_CONFIG=common/build.config.gki.aarch64 \
+          build/build.sh
 
       - name: Package AnyKernel3
         run: |
