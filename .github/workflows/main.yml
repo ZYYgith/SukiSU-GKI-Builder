@@ -53,41 +53,34 @@ jobs:
           cd kernel/common
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s ${{ github.event.inputs.susi_mode }}
 
-      - name: Enable kernel configs
+      - name: Create defconfig fragment
         run: |
-          cd kernel/common
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KPM
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS
-          ./scripts/config --file arch/arm64/configs/gki_defconfig -e CONFIG_KALLSYMS_ALL
+          cat > kernel/custom.fragment << 'EOF'
+          CONFIG_KPM=y
+          CONFIG_KALLSYMS=y
+          CONFIG_KALLSYMS_ALL=y
+          EOF
+          cat kernel/custom.fragment
 
       - name: Build kernel
         run: |
           cd kernel
-          
-          # 去掉 check_defconfig，避免配置修改后校验失败
-          sed -i 's/check_defconfig && //g' common/build.config.gki
-          
-          # 在 defconfig 生成后自动注入 KPM 和 KALLSYMS
-          cat > /tmp/custom_config.sh << 'EOF'
-          #!/bin/bash
-          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KPM
-          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KALLSYMS
-          ./scripts/config --file ${OUT_DIR}/.config -e CONFIG_KALLSYMS_ALL
-          (cd ${OUT_DIR} && make O=${OUT_DIR} olddefconfig)
-          EOF
-          chmod +x /tmp/custom_config.sh
-          
-          POST_DEFCONFIG_CMDS="/tmp/custom_config.sh" \
+          GKI_DEFCONFIG_FRAGMENT=custom.fragment \
           LTO=${{ github.event.inputs.lto }} \
           BUILD_CONFIG=common/build.config.gki.aarch64 \
           build/build.sh
 
       - name: Package AnyKernel3
         run: |
-          IMAGE_PATH=$(find kernel/out -name "Image" -type f | head -1)
-          echo "Found Image at: $IMAGE_PATH"
+          IMAGE_PATH=$(find kernel/out -name "Image.lz4" -type f | head -1)
+          echo "Found Image.lz4 at: $IMAGE_PATH"
           if [ -z "$IMAGE_PATH" ]; then
-            echo "ERROR: Kernel Image not found!"
+            echo "Trying Image instead..."
+            IMAGE_PATH=$(find kernel/out -name "Image" -type f | head -1)
+            echo "Found Image at: $IMAGE_PATH"
+          fi
+          if [ -z "$IMAGE_PATH" ]; then
+            echo "ERROR: Kernel image not found!"
             find kernel/out -name "Image*" | head -20
             exit 1
           fi
