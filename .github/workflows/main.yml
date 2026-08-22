@@ -84,7 +84,7 @@ jobs:
           ls -lh SukiSU-Ultra-GKI-android12-5.10.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SukiSU-Ultra-GKI-Kernel
           path: SukiSU-Ultra-GKI-android12-5.10.zip
