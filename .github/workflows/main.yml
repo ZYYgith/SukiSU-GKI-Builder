@@ -31,7 +31,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Install dependencies
         run: |
@@ -72,13 +72,12 @@ jobs:
 
       - name: Package AnyKernel3
         run: |
-          # 先保存当前工作目录
+          set -e
           WORKDIR=$(pwd)
           
-          # 查找内核镜像（优先 Image.lz4，没有就找 Image）
-          IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image.lz4" -type f | head -1)
-          if [ -z "$IMAGE_PATH" ]; then
-            IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image" -type f | head -1)
+          IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image.lz4" -type f 2>/dev/null | head -1)
+          if [ -z "$IMAGE_PATH" ] || [ ! -f "$IMAGE_PATH" ]; then
+            IMAGE_PATH=$(find "$WORKDIR/kernel/out" -name "Image" -type f 2>/dev/null | head -1)
           fi
           
           echo "Kernel image: $IMAGE_PATH"
@@ -88,23 +87,33 @@ jobs:
             exit 1
           fi
           
-          # 下载 AnyKernel3
           git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
-          
-          # 复制内核镜像（用绝对路径）
           cp "$IMAGE_PATH" ak3/Image
           
-          # 配置 A/B 分区和设备名
           cd ak3
           sed -i 's/is_slot_device=0/is_slot_device=1/' anykernel.sh
           sed -i 's/device.name1=placeholder/device.name1=diting/' anykernel.sh
-          
-          # 打包
-          zip -r9 ../SukiSU-Ultra-GKI-android12-5.10.zip *
+          zip -r9 ../SukiSU-Ultra-GKI-android12-5.10.zip .
           cd ..
           ls -lh SukiSU-Ultra-GKI-android12-5.10.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SukiSU-Ultra-GKI-Kernel
           path: SukiSU-Ultra-GKI-android12-5.10.zip
+          if-no-files-found: error
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: SukiSU Ultra GKI - Build ${{ github.run_number }}
+          body: |
+            **Build #${{ github.run_number }}**
+            - Kernel: android12-5.10
+            - SukiSU: ${{ github.event.inputs.susi_mode }}
+            - LTO: ${{ github.event.inputs.lto }}
+          files: SukiSU-Ultra-GKI-android12-5.10.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
